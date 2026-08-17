@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/razbuild/raztodo/main/assets/RazTodo.svg" alt="RazTodo" width="150" />
+  <img src="https://raw.githubusercontent.com/razbuild/raztodo/main/assets/RazTodo.svg" alt="RazTodo" width="200" />
 
 # RazTodo
 
