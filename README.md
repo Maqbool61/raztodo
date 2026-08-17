@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/razbuild/raztodo/main/assets/RazTodo.svg" alt="RazTodo" width="200" />
+  <img src="https://raw.githubusercontent.com/razbuild/raztodo/main/assets/RazTodo.svg" alt="RazTodo" width="185" />
 
 # RazTodo
 
@@ -264,31 +264,9 @@ RazTodo is part of the [RazBuild](https://github.com/razbuild) ecosystem of open
 
 ## Contributing
 
-We welcome bug reports, feature requests, and pull requests.
+Contributions are welcome! Whether it's bug reports, feature requests, documentation improvements, or code changes, check the contribution guide before getting started.
 
-```bash
-git clone https://github.com/razbuild/raztodo
-cd raztodo
-uv sync
-```
-
-### Quality checks
-
-```bash
-uv run pytest
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
-uv run ty check src/
-```
-
-### Workflow
-
-1. Create feature branch
-2. Implement changes
-3. Ensure tests pass
-4. Submit PR
-
-See the [CONTRIBUTING](https://github.com/razbuild/.github/blob/main/CONTRIBUTING.md) guide for details.
+See the [Contributing Guide](https://github.com/razbuild/raztodo/blob/main/CONTRIBUTING.md) for development setup, testing, coding standards, and pull request guidelines.
 
 ---
 

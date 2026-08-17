@@ -150,7 +150,7 @@
 ## [0.5.0] - 2026-06-10
 
 ### Added
-- Added an optional FastAPI-powered web UI, including its test suite and CLI router test coverage, contributed ([#26](https://github.com/razbuild/raztodo/pull/26) by [@Lee123-hub33](https://github.com/Lee123-hub33)), available through the new `rt-web` entry point and the `raztodo[web]` extra
+- Added an optional FastAPI-powered web UI, including its test suite and CLI router test coverage
 - Added a lightweight single-page web interface for creating, listing, searching, completing, deleting, clearing, importing, and exporting tasks
 - Added a dedicated `src/raztodo/presentation/web/ui.py` module to keep the web UI HTML, CSS, and JavaScript separate from the FastAPI app wiring
 
@@ -207,7 +207,7 @@
 ## [0.3.0] - 2026-05-02
 
 ### Added
-- CLI auto-complete feature ([#2](https://github.com/razbuild/raztodo/pull/2) by [@MaswiliK](https://github.com/MaswiliK))
+- CLI auto-complete feature
 
 ### Changed
 - Minimum required Python version raised to 3.10
