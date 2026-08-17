@@ -290,3 +290,203 @@ class TestSQLiteTaskRepository:
         # Verify search returns nothing
         search_results = task_repo.search_tasks("Task")
         assert len(search_results) == 0
+
+    def test_get_task(self, task_repo):
+        """Test get_task returns task entity or None."""
+        task_id = task_repo.add_task("Specific Task", description="Desc", priority="H")
+        task = task_repo.get_task(task_id)
+        assert task is not None
+        assert task.id == task_id
+        assert task.title == "Specific Task"
+        assert task_repo.get_task(99999) is None
+
+    def test_ensure_writable_path_mkdir_failure(self, monkeypatch):
+        """Test ensure_writable_path handles directory creation failure."""
+        from pathlib import Path
+
+        from raztodo.domain.exceptions import RazTodoException
+        from raztodo.infrastructure.sqlite.task_repository import ensure_writable_path
+
+        def fake_mkdir(self, *args, **kwargs):
+            raise OSError("Read-only file system")
+
+        monkeypatch.setattr(Path, "mkdir", fake_mkdir)
+        with pytest.raises(RazTodoException) as exc_info:
+            ensure_writable_path("/nonexistent_forbidden_dir/task.db")
+        assert "Cannot create directory" in str(exc_info.value)
+
+    def test_add_task_database_error(self, task_repo, monkeypatch):
+        """Test add_task raises DatabaseError on generic SQLite Error."""
+        import sqlite3
+
+        def fake_insert(*args, **kwargs):
+            raise sqlite3.Error("Disk full")
+
+        monkeypatch.setattr(task_repo._dao, "insert", fake_insert)
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.add_task("Task")
+        assert "DatabaseError during add_task" in str(exc_info.value)
+
+    def test_update_task_clear_priority(self, task_repo):
+        """Test updating priority to empty string clears it."""
+        task_id = task_repo.add_task("Task", priority="H")
+        task_repo.update_task(task_id, priority="")
+        task = task_repo.get_task(task_id)
+        assert task.priority == ""
+
+    def test_update_task_database_error(self, task_repo, monkeypatch):
+        """Test update_task raises DatabaseError on generic SQLite Error."""
+        import sqlite3
+
+        task_id = task_repo.add_task("Task")
+
+        def fake_update(*args, **kwargs):
+            raise sqlite3.Error("Write failed")
+
+        monkeypatch.setattr(task_repo._dao, "update", fake_update)
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.update_task(task_id, title="New Title")
+        assert "DatabaseError during update_task" in str(exc_info.value)
+
+    def test_export_tasks_file_error(self, task_repo):
+        """Test export_tasks handles file write exceptions."""
+        from raztodo.domain.exceptions import RazTodoException
+
+        task_repo.add_task("Task 1")
+
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.export_tasks("/dev/null/forbidden/path.json")
+        assert "FileOperationError" in str(exc_info.value)
+
+    def test_import_tasks_all_errors_raises_exception(self, task_repo, tmp_path):
+        """Test importing tasks where all items are invalid raises RazTodoException."""
+        import json
+
+        from raztodo.domain.exceptions import RazTodoException
+
+        invalid_file = tmp_path / "invalid_tasks.json"
+        invalid_file.write_text(
+            json.dumps([{"description": "No title"}, {"title": ""}]), encoding="utf-8"
+        )
+
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.import_tasks(str(invalid_file))
+        assert "Failed to import any tasks" in str(exc_info.value)
+
+    def test_import_tasks_done_flag_error_logged(self, task_repo, tmp_path, monkeypatch):
+        """Test importing task when setting done flag fails."""
+        import json
+        import sqlite3
+
+        valid_file = tmp_path / "valid_done.json"
+        valid_file.write_text(json.dumps([{"title": "Task Done", "done": True}]), encoding="utf-8")
+
+        original_update = task_repo._dao.update
+
+        def fake_update(task_id, **kwargs):
+            if "done" in kwargs:
+                raise sqlite3.Error("Mocked done flag failure")
+            return original_update(task_id, **kwargs)
+
+        monkeypatch.setattr(task_repo._dao, "update", fake_update)
+        count = task_repo.import_tasks(str(valid_file))
+        assert count == 1
+
+    def test_clear_all_tasks_database_error(self, task_repo, monkeypatch):
+        """Test clear_all_tasks raises DatabaseError on generic SQLite Error."""
+        import sqlite3
+
+        def fake_clear(*args, **kwargs):
+            raise sqlite3.Error("Locked")
+
+        monkeypatch.setattr(task_repo._dao, "clear_all", fake_clear)
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.clear_all_tasks()
+        assert "DatabaseError during clear_all_tasks" in str(exc_info.value)
+
+    def test_close_multiple_times(self, task_repo):
+        """Test closing connection multiple times is safe."""
+        task_repo.close()
+        assert task_repo._conn is None
+        task_repo.close()
+        assert task_repo._conn is None
+
+    def test_ensure_writable_path_permission_error(self, tmp_path, monkeypatch):
+        """Test ensure_writable_path raises FilePermissionError when file is not writable."""
+        import os
+
+        from raztodo.domain.exceptions import RazTodoException
+        from raztodo.infrastructure.sqlite.task_repository import ensure_writable_path
+
+        existing_file = tmp_path / "readonly.json"
+        existing_file.write_text("{}", encoding="utf-8")
+
+        orig_access = os.access
+
+        def fake_access(path, mode):
+            if str(path) == str(existing_file) and mode == os.W_OK:
+                return False
+            return orig_access(path, mode)
+
+        monkeypatch.setattr(os, "access", fake_access)
+        with pytest.raises(RazTodoException) as exc_info:
+            ensure_writable_path(str(existing_file))
+        assert "FilePermissionError" in str(exc_info.value)
+
+    def test_export_tasks_json_dump_error(self, task_repo, tmp_path, monkeypatch):
+        """Test export_tasks handles exceptions during JSON serialization (line 239)."""
+        import json
+
+        from raztodo.domain.exceptions import RazTodoException
+
+        task_repo.add_task("Task 1")
+        export_file = tmp_path / "export.json"
+
+        def fake_dump(*args, **kwargs):
+            raise TypeError("Serialization error")
+
+        monkeypatch.setattr(json, "dump", fake_dump)
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.export_tasks(str(export_file))
+        assert "FileOperationError during export_tasks" in str(exc_info.value)
+
+    def test_import_tasks_invalid_json_format(self, task_repo, tmp_path):
+        """Test import_tasks handles invalid JSON syntax (line 251)."""
+        from raztodo.domain.exceptions import RazTodoException
+
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("{not valid json", encoding="utf-8")
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.import_tasks(str(bad_file))
+        assert "InvalidFileFormatError" in str(exc_info.value)
+
+    def test_import_tasks_generic_exception_handled(self, task_repo, tmp_path, monkeypatch):
+        """Test import_tasks handles generic non-RazTodoException during item import (lines 283-285)."""
+        import json
+
+        from raztodo.domain.exceptions import RazTodoException
+
+        valid_file = tmp_path / "generic_fail.json"
+        valid_file.write_text(json.dumps([{"title": "Fail Task"}]), encoding="utf-8")
+
+        def fake_add_task(*args, **kwargs):
+            raise RuntimeError("Unexpected error")
+
+        monkeypatch.setattr(task_repo, "add_task", fake_add_task)
+        with pytest.raises(RazTodoException) as exc_info:
+            task_repo.import_tasks(str(valid_file))
+        assert "Failed to import any tasks" in str(exc_info.value)
+
+    def test_export_tasks_success(self, task_repo, tmp_path):
+        """Test successful export_tasks returns True (line 238)."""
+        task_repo.add_task("Task for export", description="Desc")
+        export_file = tmp_path / "success_export.json"
+        assert task_repo.export_tasks(str(export_file)) is True
+
+    def test_import_tasks_without_done_key(self, task_repo, tmp_path):
+        """Test import_tasks handles item without done key (branch 274->279)."""
+        import json
+
+        valid_file = tmp_path / "no_done.json"
+        valid_file.write_text(json.dumps([{"title": "Task No Done"}]), encoding="utf-8")
+        assert task_repo.import_tasks(str(valid_file)) == 1
