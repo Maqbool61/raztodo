@@ -1,4 +1,5 @@
 import json
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -9,12 +10,18 @@ class TestTaskDAO:
     """Test cases for TaskDAO."""
 
     @pytest.fixture
-    def dao(self, in_memory_db):
-        """Create a TaskDAO instance with in-memory database."""
+    def db_and_dao(self, in_memory_db):
+        """Create a TaskDAO instance and connection with in-memory database."""
         conn = in_memory_db()
         dao = TaskDAO(conn)
-        yield dao
+        yield conn, dao
         conn.close()
+
+    @pytest.fixture
+    def dao(self, db_and_dao):
+        """Create a TaskDAO instance."""
+        _, dao = db_and_dao
+        return dao
 
     def test_insert_task(self, dao):
         """Test inserting a task."""
@@ -39,13 +46,14 @@ class TestTaskDAO:
         )
         assert task_id > 0
 
-    def test_insert_task_tags_json(self, dao):
+    def test_insert_task_tags_json(self, db_and_dao):
         """Test that tags are stored as JSON."""
+        conn, dao = db_and_dao
         tags = ["tag1", "tag2", "tag3"]
         dao.insert("Task", tags=tags)
 
         # Verify tags are stored as JSON
-        row = dao._conn.execute("SELECT tags FROM tasks").fetchone()
+        row = conn.execute("SELECT tags FROM tasks").fetchone()
         stored_tags = json.loads(row[0])
         assert stored_tags == tags
 
@@ -110,14 +118,38 @@ class TestTaskDAO:
         work_rows = list(dao.fetch_all(project="Work"))
         assert len(work_rows) == 1
 
+    def test_fetch_all_filter_due_dates(self, dao):
+        """Test filtering by due_before and due_after dates."""
+        dao.insert("Task 1", due_date="2025-01-10")
+        dao.insert("Task 2", due_date="2025-01-20")
+        dao.insert("Task 3", due_date="2025-01-30")
+
+        before_rows = list(dao.fetch_all(due_before="2025-01-15"))
+        assert len(before_rows) == 1
+        assert before_rows[0]["title"] == "Task 1"
+
+        after_rows = list(dao.fetch_all(due_after="2025-01-25"))
+        assert len(after_rows) == 1
+        assert after_rows[0]["title"] == "Task 3"
+
+    def test_fetch_all_filter_tags(self, dao):
+        """Test filtering by tags."""
+        dao.insert("Task 1", tags=["home", "chores"])
+        dao.insert("Task 2", tags=["work"])
+
+        tag_rows = list(dao.fetch_all(tags=["home"]))
+        assert len(tag_rows) == 1
+        assert tag_rows[0]["title"] == "Task 1"
+
     def test_update_task_title(self, dao):
         """Test updating task title."""
         task_id = dao.insert("Old Title")
         result = dao.update(task_id, title="New Title")
         assert result > 0
 
-        row = dao._conn.execute("SELECT title FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        assert row[0] == "New Title"
+        row = dao.fetch_by_id(task_id)
+        assert row is not None
+        assert row["title"] == "New Title"
 
     def test_update_task_done(self, dao):
         """Test updating task done status."""
@@ -125,8 +157,9 @@ class TestTaskDAO:
         result = dao.update(task_id, done=True)
         assert result > 0
 
-        row = dao._conn.execute("SELECT done FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        assert row[0] == 1
+        row = dao.fetch_by_id(task_id)
+        assert row is not None
+        assert row["done"] == 1
 
     def test_update_task_clear_due_date(self, dao):
         """Test clearing task due date."""
@@ -134,8 +167,9 @@ class TestTaskDAO:
         result = dao.update(task_id, due_date="__CLEAR__")
         assert result > 0
 
-        row = dao._conn.execute("SELECT due_date FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        assert row[0] is None
+        row = dao.fetch_by_id(task_id)
+        assert row is not None
+        assert row["due_date"] is None
 
     def test_update_task_clear_project(self, dao):
         """Test clearing task project."""
@@ -143,8 +177,25 @@ class TestTaskDAO:
         result = dao.update(task_id, project="__CLEAR__")
         assert result > 0
 
-        row = dao._conn.execute("SELECT project FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        assert row[0] is None
+        row = dao.fetch_by_id(task_id)
+        assert row is not None
+        assert row["project"] is None
+
+    def test_update_task_tags(self, dao):
+        """Test updating and clearing task tags."""
+        task_id = dao.insert("Task", tags=["tag1"])
+        result = dao.update(task_id, tags=["tag2", "tag3"])
+        assert result > 0
+
+        row = dao.fetch_by_id(task_id)
+        assert row is not None
+        assert json.loads(row["tags"]) == ["tag2", "tag3"]
+
+        # Clear tags
+        dao.update(task_id, tags=[])
+        row_cleared = dao.fetch_by_id(task_id)
+        assert row_cleared is not None
+        assert row_cleared["tags"] is None
 
     def test_update_task_no_changes(self, dao):
         """Test updating task with no changes returns 0."""
@@ -198,6 +249,57 @@ class TestTaskDAO:
 
         rows = list(dao.search("Task", tags=["urgent"]))
         assert len(rows) == 1
+
+    def test_search_tasks_fts_success_mock(self):
+        """Test search successfully returning via FTS5 path (line 211)."""
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value = mock_conn
+        mock_conn.__exit__.return_value = None
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = [{"id": 1, "title": "Mock Task"}]
+        mock_conn.execute.return_value = mock_cursor
+
+        dao = TaskDAO(mock_conn)
+        rows = dao.search("Mock")
+        assert len(rows) == 1
+        assert rows[0]["id"] == 1
+
+    def test_search_tasks_fallback_like(self, db_and_dao):
+        """Test searching tasks with fallback LIKE path when FTS5 query fails."""
+        conn, dao = db_and_dao
+        dao.insert(
+            "Fallback Python",
+            description="Python query",
+            priority="H",
+            project="Work",
+            tags=["tag1"],
+        )
+
+        class ProxyConnection:
+            def __init__(self, target):
+                self._target = target
+                self._first_call = True
+
+            def execute(self, query, params=()):
+                if self._first_call and "MATCH" in str(query):
+                    self._first_call = False
+                    raise RuntimeError("FTS5 table unavailable")
+                return self._target.execute(query, params)
+
+            def __enter__(self):
+                return self._target.__enter__()
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return self._target.__exit__(exc_type, exc_val, exc_tb)
+
+            def __getattr__(self, name):
+                return getattr(self._target, name)
+
+        proxy_conn = ProxyConnection(conn)
+        fallback_dao = TaskDAO(proxy_conn)
+        rows = list(fallback_dao.search("Python", priority="H", project="Work", tags=["tag1"]))
+        assert len(rows) == 1
+        assert "Fallback Python" in rows[0]["title"]
 
     def test_clear_all(self, dao):
         """Test clearing all tasks."""
