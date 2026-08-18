@@ -10,7 +10,7 @@
 [![PyPI Version](https://img.shields.io/pypi/v/raztodo)](https://pypi.org/project/raztodo/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/raztodo)](https://pypi.org/project/raztodo/)
 [![CI](https://img.shields.io/github/actions/workflow/status/razbuild/raztodo/ci.yml)](https://github.com/razbuild/raztodo/actions/workflows/ci.yml)
-[![Codecov](https://img.shields.io/codecov/c/github/razbuild/raztodo)](https://codecov.io/gh/razbuild/raztodo)
+[![Codecov (with branch)](https://img.shields.io/codecov/c/github/razbuild/raztodo/main)](https://codecov.io/gh/razbuild/raztodo)
 
 </div>
 
