@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.2] - 2026-08-18
+
+### Added
+
+* Added a contributing guide
+* Expanded unit test coverage across task infrastructure and deduplication
+
+### Fixed
+
+* Fixed type-checking errors
+* Improved handling of task tags with non-list JSON values
+
+### Changed
+
+* Updated project documentation
+
+---
+
 ## [0.9.1] - 2026-08-04
 
 ### Changed
