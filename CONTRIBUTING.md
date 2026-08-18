@@ -1,6 +1,6 @@
 # Contributing to RazTodo
 
-Thanks for wanting to help with RazTodo. Whatever your experience level, there's an issue here for you: some are tiny and easy, some are more involved. You don't need permission or deep knowledge of the codebase to get started, just pick something and go.
+Thanks for wanting to help with RazTodo. Whatever your experience level, there are different ways to help, from small fixes and documentation improvements to more involved changes. You don't need permission or deep knowledge of the codebase to get started, just pick something that interests you and go.
 
 ## Picking an Issue 🔎
 
@@ -24,6 +24,27 @@ Just browse the [open issues](https://github.com/razbuild/raztodo/issues) and gr
 * Keep discussions respectful and constructive.
 
 Please follow our [Code of Conduct](https://github.com/razbuild/.github/blob/main/CODE_OF_CONDUCT.md).
+
+## Early Feedback 🌱
+
+RazTodo is still an early project, so feedback is especially valuable.
+
+You don't need to be a developer to help. If you try RazTodo and notice
+something confusing, broken, or missing, we'd love to hear about it.
+
+Share your experience in the
+[Early Feedback discussion](https://github.com/razbuild/raztodo/discussions).
+
+Things that are useful to us:
+
+- CLI experience
+- Web UI experience
+- Installation and setup
+- Documentation
+- Bugs or confusing behavior
+- Features you'd expect from a task manager
+
+Even a few notes after trying the project are helpful.
 
 ## Reporting Bugs 🐛
 
